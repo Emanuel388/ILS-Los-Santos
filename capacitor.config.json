@@ -1,11 +1,11 @@
 {
   "appId": "com.deinefirma.flashinglight",
-  "appName": "Flashing Light Leitstelle",
+  "appName": "ILS-Los-Santos",
   "webDir": "webapp",
   "bundledWebRuntime": false,
 
   "server": {
-    "url": "https://flashing-light-leitstelle.onrender.com",
+    "url": "https://ils-los-santos.onrender.com",
     "cleartext": false
   }
 }
