@@ -1,0 +1,47 @@
+body {
+  font-family: sans-serif;
+  background: #f0f0f0;
+  margin: 0;
+  padding: 1rem;
+}
+h1, h2, h3 {
+  text-align: center;
+}
+input, select, button, textarea {
+  display: block;
+  width: 100%;
+  margin: .5rem 0;
+  padding: .5rem;
+  font-size: 1rem;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  background: white;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: .5rem;
+  text-align: left;
+}
+.status-0 { background: #721c24; }
+.status-1 { background: #00BFFF; }
+.status-2 { background: #32CD32; }
+.status-3 { background: #856404; }
+.status-4 { background: #004085; }
+.status-5 { background: #d6d6d6; }
+.status-6 { background: #383d41; }
+.status-7 { background: #721c24; }
+.status-8 { background: #155724; }
+
+/* Edit-Modal */
+#editModal {
+  position: fixed;
+  top: 10%; left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 1rem;
+  box-shadow: 0 0 8px rgba(0,0,0,0.2);
+  z-index: 1000;
+}

@@ -1,0 +1,12 @@
+{
+  "appId": "com.deinefirma.flashinglight",
+  "appName": "Flashing Light Leitstelle",
+  "webDir": "webapp",
+  "bundledWebRuntime": false,
+
+  "server": {
+    "url": "https://flashing-light-leitstelle.onrender.com",
+    "cleartext": false
+  }
+}
+

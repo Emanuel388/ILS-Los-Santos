@@ -1,0 +1,49 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "adminpw",
+      "role": "admin"
+    },
+    {
+      "username": "leit",
+      "password": "leitpw",
+      "role": "leitstelle"
+    },
+    {
+      "username": "fw1",
+      "password": "fwpw",
+      "role": "feuerwehr"
+    },
+    {
+      "username": "pol1",
+      "password": "polpw",
+      "role": "polizei"
+    },
+    {
+      "username": "rd1",
+      "password": "rdpw",
+      "role": "rettung"
+    }
+  ],
+  "vehicles": [
+    {
+      "name": "RTW 1",
+      "role": "rettung",
+      "forLeitstelle": true
+    },
+    {
+      "name": "LF 1",
+      "role": "feuerwehr",
+      "forLeitstelle": true
+    },
+    {
+      "name": "Streifenwagen 1",
+      "role": "polizei",
+      "forLeitstelle": true
+    }
+  ],
+  "log": [],
+  "missions": [],
+  "alarms": []
+}

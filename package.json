@@ -1,0 +1,20 @@
+{
+  "name": "flashing-light-leitstelle",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "mongoose": "^7.3.1",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^5.0.4",
+    "@capacitor/core": "^5.0.4"
+  }
+}

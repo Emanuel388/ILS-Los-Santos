@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin – Verwaltung</title>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Content erst anzeigen, wenn initAdminPage() durchgelaufen ist */
+    #content { display: none; }
+
+    table {
+      width:100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+    }
+    th, td {
+      border:1px solid #ccc;
+      padding: .5rem;
+      text-align: left;
+    }
+    input, select, button {
+      margin: .25rem 0;
+      padding: .5rem;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+    .section { margin-bottom:2rem; }
+  </style>
+
+  <!-- Debug-Log, um sicherzugehen, dass diese Datei geladen wird -->
+  <script>console.log("⭐ admin.html geladen");</script>
+
+  <!-- initAdminPage -->
+  <script>
+    async function initAdminPage(){
+      // Hilfsfunktion für JSON-fetch mit Credentials
+      async function fetchJson(url, opts = {}) {
+        const res = await fetch(url, {
+          credentials: "include",
+          headers:     { "Content-Type":"application/json" },
+          ...opts
+        });
+        if (!res.ok) throw res;
+        return res.json();
+      }
+
+      // --- Benutzer verwalten ---
+      const userTableBody = document.querySelector("#userTable tbody");
+
+      async function loadUsers(){
+        try {
+          const users = await fetchJson("/admin/users");
+          userTableBody.innerHTML = "";
+          users.forEach(u => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td><input data-field="username" value="${u.username}"></td>
+              <td><input data-field="password" type="password" value="${u.password}"></td>
+              <td>
+                <select data-field="role">
+                  ${["admin","leitstelle","feuerwehr","rettung","polizei"]
+                    .map(r=>`<option value="${r}" ${r===u.role?'selected':''}>${r}</option>`).join("")}
+                </select>
+              </td>
+              <td>
+                <button data-action="save">Speichern</button>
+                <button data-action="delete">Löschen</button>
+              </td>`;
+            userTableBody.appendChild(tr);
+
+            // Speichern
+            tr.querySelector("[data-action=save]").onclick = async () => {
+              const newPW   = tr.querySelector('input[data-field=password]').value.trim();
+              const newRole = tr.querySelector('select[data-field=role]').value;
+              await fetchJson(`/admin/users/${u._id}`, {
+                method:"PUT",
+                body:JSON.stringify({ password:newPW, role:newRole })
+              });
+              loadUsers();
+            };
+            // Löschen
+            tr.querySelector("[data-action=delete]").onclick = async () => {
+              if (!confirm("Benutzer wirklich löschen?")) return;
+              await fetch(`/admin/users/${u._id}`, {
+                method:"DELETE", credentials:"include"
+              });
+              loadUsers();
+            };
+          });
+        } catch(err){
+          console.error("Fehler loadUsers:", err);
+        }
+      }
+
+      // Neuer Benutzer anlegen
+      document.getElementById("btnAddUser").onclick = async () => {
+        try {
+          const u = document.getElementById("newUserName").value.trim();
+          const p = document.getElementById("newUserPass").value.trim();
+          const r = document.getElementById("newUserRole").value;
+          await fetchJson("/admin/users", {
+            method:"POST",
+            body:JSON.stringify({ username:u, password:p, role:r })
+          });
+          document.getElementById("newUserName").value = "";
+          document.getElementById("newUserPass").value  = "";
+          loadUsers();
+        } catch(err){
+          console.error("AddUser error:", err);
+          alert("Fehler beim Anlegen");
+        }
+      };
+
+      // --- Fahrzeuge verwalten ---
+      const vehTableBody = document.querySelector("#vehTable tbody");
+
+      async function loadVehicles(){
+        try {
+          const arr = await fetchJson("/admin/vehicles");
+          vehTableBody.innerHTML = "";
+          arr.forEach(v => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td><input data-field="name" value="${v.name}"></td>
+              <td>
+                <select data-field="role">
+                  ${["feuerwehr","rettung","polizei"]
+                    .map(r=>`<option value="${r}" ${r===v.role?'selected':''}>${r}</option>`).join("")}
+                </select>
+              </td>
+              <td>
+                <input data-field="forLeitstelle" type="checkbox" ${v.forLeitstelle?'checked':''}>
+              </td>
+              <td>
+                <button data-action="save">Speichern</button>
+                <button data-action="delete">Löschen</button>
+              </td>`;
+            vehTableBody.appendChild(tr);
+
+            // Speichern
+            tr.querySelector("[data-action=save]").onclick = async () => {
+              const role = tr.querySelector('select[data-field=role]').value;
+              const fl   = tr.querySelector('input[data-field=forLeitstelle]').checked;
+              await fetchJson(`/admin/vehicles/${v._id}`, {
+                method:"PUT",
+                body:JSON.stringify({ role, forLeitstelle:fl })
+              });
+              loadVehicles();
+            };
+            // Löschen
+            tr.querySelector("[data-action=delete]").onclick = async () => {
+              if (!confirm("Fahrzeug wirklich löschen?")) return;
+              await fetch(`/admin/vehicles/${v._id}`, {
+                method:"DELETE", credentials:"include"
+              });
+              loadVehicles();
+            };
+          });
+        } catch(err){
+          console.error("Fehler loadVehicles:", err);
+        }
+      }
+
+      // Neues Fahrzeug anlegen
+      document.getElementById("btnAddVeh").onclick = async () => {
+        try {
+          const n = document.getElementById("newVehName").value.trim();
+          const r = document.getElementById("newVehRole").value;
+          const f = document.getElementById("newVehLeit").checked;
+          await fetchJson("/admin/vehicles", {
+            method:"POST",
+            body:JSON.stringify({ name:n, role:r, forLeitstelle:f })
+          });
+          document.getElementById("newVehName").value = "";
+          loadVehicles();
+        } catch(err){
+          console.error("AddVeh error:", err);
+          alert("Fehler beim Anlegen");
+        }
+      };
+
+      // initiales Laden
+      loadUsers();
+      loadVehicles();
+    }
+  </script>
+
+  <!-- Session‑Check & init -->
+  <script>
+    (async ()=>{
+      const res = await fetch("/debug-session", { credentials:"include" });
+      const { sessionUser } = await res.json();
+      if (!sessionUser || sessionUser.role!=="admin") {
+        alert("⚠️ Nur für Admins");
+        window.location.href = "/";
+        return;
+      }
+      document.getElementById("content").style.display = "block";
+      initAdminPage();
+    })();
+  </script>
+</head>
+
+<body>
+  <h1>🔧 Admin-Dashboard</h1>
+  <div id="content">
+    <section class="section">
+      <h2>Benutzer verwalten</h2>
+      <table id="userTable">
+        <thead><tr><th>Username</th><th>Passwort</th><th>Rolle</th><th>Aktion</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <h3>Neuen Benutzer anlegen</h3>
+      <input id="newUserName" placeholder="Username">
+      <input id="newUserPass" type="password" placeholder="Passwort">
+      <select id="newUserRole">
+        <option value="admin">admin</option>
+        <option value="leitstelle">leitstelle</option>
+        <option value="feuerwehr">feuerwehr</option>
+        <option value="rettung">rettung</option>
+        <option value="polizei">polizei</option>
+      </select>
+      <button id="btnAddUser">Benutzer anlegen</button>
+    </section>
+
+    <section class="section">
+      <h2>Fahrzeuge verwalten</h2>
+      <table id="vehTable">
+        <thead><tr><th>Name</th><th>Rolle</th><th>für Leitstelle</th><th>Aktion</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <h3>Neues Fahrzeug anlegen</h3>
+      <input id="newVehName" placeholder="Name">
+      <select id="newVehRole">
+        <option value="feuerwehr">feuerwehr</option>
+        <option value="rettung">rettung</option>
+        <option value="polizei">polizei</option>
+      </select>
+      <label><input type="checkbox" id="newVehLeit"> Für Leitstelle</label><br>
+      <button id="btnAddVeh">Fahrzeug anlegen</button>
+    </section>
+  </div>
+</body>
+</html>

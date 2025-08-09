@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Leitstelle – Dashboard</title>
+  <!-- zentrales Stylesheet mit allen Status-Klassen -->
+  <link rel="stylesheet" href="style.css" />
+  <!-- PWA Manifest & Theme -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#007bff">
+  <!-- Socket.IO-Client -->
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    /* Fahrzeug‑Listen‑Styles bleiben inline */
+    .vehicle-list, .vehicle-list-edit {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .vehicle-item {
+      cursor: pointer;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      user-select: none;
+    }
+    .vehicle-item.selected {
+      background-color: #007bff33;
+      border-color: #007bff;
+      color: #004085;
+    }
+    /* Edit-Notes-Liste */
+    #editNotesContainer {
+      margin: 1rem 0;
+    }
+    #editNotes {
+      max-height: 150px;
+      overflow-y: auto;
+      padding-left: 1rem;
+      border: 1px solid #ddd;
+      background: #fafafa;
+    }
+    #editNotes li {
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <audio id="alarmSound" src="/alarm.mp3" preload="auto"></audio>
+
+  <h1>📡 Live Status Übersicht</h1>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Fzgn</th><th>Status</th><th>Benutzer</th>
+        <th>Rolle</th><th>Zeit</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <section class="container">
+    <h2>Einsatz anlegen</h2>
+    <label>Fahrzeuge (anklicken zum Auswählen):</label>
+    <div id="missionVehiclesList" class="vehicle-list"></div>
+    <input id="missionTitle" placeholder="Titel"><br>
+    <textarea id="missionDesc" placeholder="Beschreibung"></textarea><br>
+    <button id="btnCreate">Einsatz anlegen</button>
+    <p id="missionFeedback"></p>
+  </section>
+
+  <section class="container">
+    <h2>Einsätze</h2>
+    <button id="showOngoing">Laufend</button>
+    <button id="showDone">Abgeschlossen</button>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Fahrz.</th><th>Titel</th><th>Beschreibung</th>
+          <th>Erstellt von</th><th>Zeit</th><th>Aktion</th>
+        </tr>
+      </thead>
+      <tbody id="missionsBody"></tbody>
+    </table>
+  </section>
+
+  <div id="editModal" class="container"
+       style="
+         display: none;
+         position: fixed;
+         top: 20%;
+         left: 50%;
+         transform: translateX(-50%);
+         background: #fff;
+         padding: 1rem;
+         box-shadow: 0 0 10px rgba(0,0,0,0.2);
+         width: 90%;
+         max-width: 500px;
+         /* neu: max. Höhe und Scrollbar */
+         max-height: 80vh;
+         overflow-y: auto;
+       ">
+    <h3>Einsatz bearbeiten</h3>
+    <label>Fahrzeuge (anklicken):</label>
+    <div id="editVehiclesList" class="vehicle-list-edit"></div>
+    <input id="editTitle" placeholder="Titel"><br>
+    <textarea id="editDesc" placeholder="Beschreibung"></textarea><br>
+
+    <!-- Änderungsprotokoll -->
+    <div id="editNotesContainer">
+      <h4>Änderungs­protokoll</h4>
+      <ul id="editNotes"></ul>
+    </div>
+
+    <button id="btnSaveEdit">Speichern</button>
+    <button onclick="closeEdit()">Abbrechen</button>
+  </div>
+
+  <script>
+    const socket       = io();
+    const tbody        = document.getElementById("tbody");
+    const vehiclesList = document.getElementById("missionVehiclesList");
+    const inpTitle     = document.getElementById("missionTitle");
+    const inpDesc      = document.getElementById("missionDesc");
+    const btnCreate    = document.getElementById("btnCreate");
+    const fb           = document.getElementById("missionFeedback");
+    const missionsBody = document.getElementById("missionsBody");
+    const showOngoing  = document.getElementById("showOngoing");
+    const showDone     = document.getElementById("showDone");
+    const editModal    = document.getElementById("editModal");
+    const editList     = document.getElementById("editVehiclesList");
+    const inpETitle    = document.getElementById("editTitle");
+    const inpEDesc     = document.getElementById("editDesc");
+    const btnSaveEdit  = document.getElementById("btnSaveEdit");
+    const notesUl      = document.getElementById("editNotes");
+    let   curEditId    = null;
+    let   filterDone   = false;
+
+    const fmt = iso => new Date(iso).toLocaleString();
+    const cls = s => `status-${s}`; // nutzt Klassen aus style.css
+
+    showOngoing.onclick = () => { filterDone=false; loadMissions(); };
+    showDone.onclick    = () => { filterDone=true; loadMissions(); };
+
+    function renderStatus(e) {
+      let tr = document.getElementById("r-"+e.vehicle);
+      if (!tr) {
+        tr = document.createElement("tr");
+        tr.id = "r-"+e.vehicle;
+        tbody.appendChild(tr);
+      }
+      tr.innerHTML = `
+        <td>${e.vehicle}</td>
+        <td>${e.status}</td>
+        <td>${e.user}</td>
+        <td>${e.role}</td>
+        <td>${fmt(e.time)}</td>
+        <td></td>
+      `;
+      tr.className = cls(e.status);
+    }
+
+    fetch("/log", { credentials: "include" })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(log => {
+        const latest = {};
+        log.forEach(e => latest[e.vehicle] = e);
+        Object.values(latest).forEach(renderStatus);
+      })
+      .catch(_ => {
+        alert("⚠️ Zugriff verweigert");
+        window.location.href = "/";
+      });
+
+    socket.on("statusUpdate", renderStatus);
+    socket.on("highPriority", e => {
+      alert(`🚨 Fahrzeug ${e.vehicle} hat Status 5 gemeldet!`);
+      const tr = document.getElementById("r-"+e.vehicle);
+      if (tr) {
+        tbody.prepend(tr);
+        tr.classList.add("status-5");
+      }
+    });
+
+    function createVehicleItems(container, vehicles, selected=[]) {
+      container.innerHTML = "";
+      vehicles.forEach(name => {
+        const div = document.createElement("div");
+        div.textContent = name;
+        div.className = "vehicle-item" + (selected.includes(name) ? " selected" : "");
+        div.onclick = () => div.classList.toggle("selected");
+        container.appendChild(div);
+      });
+    }
+
+    fetch("/vehicles", { credentials:"include" })
+      .then(r => r.json())
+      .then(arr => createVehicleItems(vehiclesList, arr.map(v => v.name)));
+
+    async function loadMissions() {
+      missionsBody.innerHTML = "";
+      const res = await fetch("/missions", { credentials:"include" });
+      if (!res.ok) return;
+      const arr = await res.json();
+      arr.filter(m => m.completed === filterDone)
+         .forEach(m => {
+           const tr = document.createElement("tr");
+           tr.id = "mission-"+m._id;
+           tr.innerHTML = `
+             <td>${m._id}</td>
+             <td>${m.vehicles.join(", ")}</td>
+             <td>${m.title}</td>
+             <td>${m.description}</td>
+             <td>${m.createdBy}</td>
+             <td>${fmt(m.createdAt)}</td>
+             <td>
+               <button onclick="openEdit('${m._id}')">Bearbeiten</button>
+               <button onclick="toggleDone('${m._id}',${m.completed})">
+                 ${m.completed ? "Wieder öffnen" : "Abschließen"}
+               </button>
+             </td>
+           `;
+           if (m.completed) tr.style.opacity = '0.5';
+           missionsBody.appendChild(tr);
+         });
+    }
+    loadMissions();
+    socket.on("newMission", loadMissions);
+    socket.on("missionUpdated", loadMissions);
+
+    btnCreate.addEventListener("click", async () => {
+      const vehicles = Array.from(
+        vehiclesList.querySelectorAll('.vehicle-item.selected')
+      ).map(d => d.textContent);
+      const title       = inpTitle.value.trim();
+      const description = inpDesc.value.trim();
+      if (!vehicles.length || !title) {
+        fb.style.color="red";
+        fb.textContent="❗ Fahrzeuge & Titel wählen";
+        return;
+      }
+      const res = await fetch("/missions", {
+        method: "POST", credentials:"include",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({vehicles,title,description})
+      });
+      const j = await res.json();
+      if (j.success) {
+        fb.style.color="green";
+        fb.textContent="✅ Angelegt";
+        inpTitle.value=""; inpDesc.value="";
+        vehiclesList.querySelectorAll('.vehicle-item.selected')
+          .forEach(d => d.classList.remove('selected'));
+        loadMissions();
+        setTimeout(() => fb.textContent="",3000);
+      } else {
+        fb.style.color="red";
+        fb.textContent="❌ "+(j.message||"Fehler");
+      }
+    });
+
+    function openEdit(id) {
+      curEditId = id;
+      fetch("/missions",{credentials:"include"})
+        .then(r => r.json())
+        .then(arr => {
+          const m = arr.find(x => x._id === id);
+          if (!m) return;
+
+          // Formular befüllen
+          inpETitle.value = m.title;
+          inpEDesc.value  = m.description;
+
+          // Änderungsprotokoll rendern
+          notesUl.innerHTML = "";
+          m.notes.forEach(n => {
+            const li = document.createElement("li");
+            li.textContent = `${new Date(n.at).toLocaleString()} — ${n.by}: ${n.text}`;
+            notesUl.appendChild(li);
+          });
+
+          // Fahrzeuge-Liste
+          fetch("/vehicles",{credentials:"include"})
+            .then(r => r.json())
+            .then(vs => {
+              createVehicleItems(editList, vs.map(v => v.name), m.vehicles);
+              editModal.style.display="block";
+            });
+        });
+    }
+
+    function closeEdit() {
+      editModal.style.display="none";
+      curEditId = null;
+    }
+
+    btnSaveEdit.addEventListener("click", async () => {
+      const vehicles = Array.from(
+        editList.querySelectorAll('.vehicle-item.selected')
+      ).map(d => d.textContent);
+      const title       = inpETitle.value.trim();
+      const description = inpEDesc.value.trim();
+      const res = await fetch(`/missions/${curEditId}`, {
+        method:"PUT", credentials:"include",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({vehicles,title,description})
+      });
+      const j = await res.json();
+      if (j.success) closeEdit();
+      else alert("❌ Speichern fehlgeschlagen");
+    });
+
+    async function toggleDone(id, current) {
+      await fetch(`/missions/${id}`, {
+        method:"PUT", credentials:"include",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({completed:!current})
+      });
+      loadMissions();
+    }
+
+    // Service Worker registrieren
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js');
+    }
+  </script>
+</body>
+</html>

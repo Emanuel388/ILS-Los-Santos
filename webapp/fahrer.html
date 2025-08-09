@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fahrer – Status & Einsätze</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- PWA-Manifest & Theme Color -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#007bff" />
+  <!-- Socket.IO-Client -->
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <!-- Alarm-Sound für neue Einsätze -->
+  <audio id="alarmSound" src="/alarm.mp3" preload="auto" style="display:none;" controls></audio>
+
+  <h1>Status setzen</h1>
+  <select id="vehicleSelect"></select>
+  <div id="buttons"></div>
+  <p id="feedback"></p>
+
+  <h2>Meine Einsätze</h2>
+  <ul id="missionList"></ul>
+
+  <script>
+    const sel            = document.getElementById("vehicleSelect");
+    const btns           = document.getElementById("buttons");
+    const fb             = document.getElementById("feedback");
+    const list           = document.getElementById("missionList");
+    const alarm          = document.getElementById("alarmSound");
+    let   current        = "";
+    let   sessionVehicle = null;
+
+    // Datum formatieren
+    const fmt = iso => new Date(iso).toLocaleString();
+
+    // Status-Buttons erzeugen
+    for (let i = 0; i <= 8; i++) {
+      const b = document.createElement("button");
+      b.textContent = `Status ${i}`;
+      b.onclick = () => sendStatus(i);
+      btns.appendChild(b);
+    }
+
+    // Session-Vehicle ermitteln
+    fetch("/debug-session", { credentials: "include" })
+      .then(r => r.json())
+      .then(info => {
+        sessionVehicle = info.sessionUser?.vehicle;
+      });
+
+    // Fahrzeuge laden
+    fetch("/vehicles", { credentials: "include" })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(arr => {
+        arr.forEach(v => sel.appendChild(new Option(v.name, v.name)));
+        current = sel.value;
+        loadMissions();
+      })
+      .catch(() => {
+        fb.textContent = "Bitte einloggen!";
+        fb.style.color   = "red";
+      });
+
+    sel.onchange = () => {
+      current = sel.value;
+      loadMissions();
+      fb.textContent = "";
+    };
+
+    // Status senden
+    async function sendStatus(status) {
+      if (!current) {
+        alert("Bitte erst ein Fahrzeug wählen!");
+        return;
+      }
+      try {
+        const res = await fetch("/status", {
+          method:      "POST",
+          credentials: "include",
+          headers:     { "Content-Type": "application/json" },
+          body:        JSON.stringify({ vehicle: current, status })
+        });
+        const j = await res.json();
+        fb.textContent = j.success ? `Status ${status} gesendet` : "Fehler beim Senden";
+        fb.style.color = j.success ? "green" : "red";
+      } catch {
+        fb.textContent = "Netzwerk-Fehler";
+        fb.style.color = "red";
+      }
+    }
+
+    // Missionen rendern
+    function renderMission(m) {
+      const li = document.createElement("li");
+      li.innerHTML = `<strong>${m.title}</strong><br>${m.description}`;
+      list.appendChild(li);
+    }
+
+    // Missionen laden
+    function loadMissions() {
+      list.innerHTML = "";
+      fetch("/missions", { credentials: "include" })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(arr => {
+          arr
+            .filter(m => m.vehicles.includes(current))
+            .forEach(renderMission);
+        })
+        .catch(() => {
+          // kein Zugriff oder Fehler
+        });
+    }
+
+    // Socket.IO + Alarm bei neuem Einsatz
+    const socket = io();
+    socket.on("newMission", m => {
+      if (m.vehicles.includes(current)) {
+        renderMission(m);
+        alarm.play().catch(() => {
+          // falls Autoplay blockiert
+          alarm.controls = true;
+          alarm.style.display = "";
+        });
+        alert(`🔔 Neuer Einsatz: ${m.title}`);
+      }
+    });
+
+    // PWA: Service Worker registrieren
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js")
+        .catch(err => console.error("SW-Registration fehlgeschlagen:", err));
+    }
+  </script>
+</body>
+</html>
